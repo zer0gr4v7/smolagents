@@ -1,0 +1,14 @@
+# OpenClaw default config - drives the affiliate-revenue engine.
+# Defaults to the curated 10-niche portfolio with the offline mock model so
+# this works without API keys. Swap `model.type` to litellm/openai/inference_client
+# when wiring real LLMs.
+
+memory_path: ./openclaw.db
+seed: 1337
+max_steps_per_day: 4
+
+model:
+  type: mock
+  # model_id: gpt-4o-mini
+  # api_key_env: OPENAI_API_KEY
+  # api_base: https://api.openai.com/v1
