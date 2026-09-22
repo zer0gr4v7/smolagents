@@ -1,10 +1,17 @@
-# branch-broom: one line of history. Fold or delete agent branches (rules in
-# scripts/consolidate-branches.sh, policy in the README). Never on a schedule: it runs on
-# "Run workflow" in the Actions tab, or when a commit changes .github/broom.run (the way an
-# agent session presses the button, since agent tokens cannot dispatch workflows). It
-# applies only when that file's first line is "apply"; otherwise it prints the plan.
+# branch-broom: one line of history. The operator does not track branches, so nobody has to.
+#   - a pull request closes (merged or not)   -> its branch is deleted right away
+#   - every Monday 06:23 UTC                   -> the broom folds docs-only branches and deletes
+#                                                 branches contained in main or whose PR is done
+#   - "Run workflow" (Actions tab) or a commit  -> the same sweep; dry-run unless "apply" is
+#     that changes .github/broom.run              ticked / is that file's first line
+# Rules live in scripts/consolidate-branches.sh. A branch carrying unmerged code with no
+# finished PR is never touched; it is named in the run summary for a human or its agent.
 name: branch-broom
 on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "23 6 * * 1"
   workflow_dispatch:
     inputs:
       apply:
@@ -19,7 +26,25 @@ permissions:
   pull-requests: read
 concurrency: branch-broom
 jobs:
+  closed-pr:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the closed pull request's branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${HEAD_REF}"; then
+            echo "deleted branch ${HEAD_REF} (PR #${{ github.event.pull_request.number }} closed)" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "branch ${HEAD_REF} already gone" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
   broom:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,5 +57,6 @@ jobs:
         run: |
           apply=no
           [ "$APPLY_INPUT" = "true" ] && apply=yes
+          [ "${{ github.event_name }}" = "schedule" ] && apply=yes
           [ "${{ github.event_name }}" = "push" ] && [ "$(head -n1 .github/broom.run 2>/dev/null)" = "apply" ] && apply=yes
-          if [ "$apply" = "yes" ]; then scripts/consolidate-branches.sh --apply; else scripts/consolidate-branches.sh; fi
+          { echo '```'; if [ "$apply" = "yes" ]; then scripts/consolidate-branches.sh --apply; else scripts/consolidate-branches.sh; fi; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
