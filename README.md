@@ -290,3 +290,7 @@ If you use `smolagents` in your publication, please cite it by using the followi
   year =         {2025}
 }
 ```
+
+## Branches
+
+`main` is the only long-lived branch. Agent branches are folded or deleted by the manual **branch-broom** workflow (Actions → branch-broom → Run workflow, tick *apply*); rules live in `scripts/consolidate-branches.sh`.

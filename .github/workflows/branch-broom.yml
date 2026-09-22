@@ -1,0 +1,32 @@
+# branch-broom: one line of history. Press "Run workflow" to fold or delete agent branches
+# (rules in scripts/consolidate-branches.sh, policy in the README). Manual only, never on a
+# schedule: deleting refs is an operator action, so it happens when someone presses the
+# button. Dry-run by default; tick "apply" to make it happen.
+name: branch-broom
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply (merge docs-only branches, delete merged/closed ones). Off = dry-run."
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  pull-requests: read
+concurrency: branch-broom
+jobs:
+  broom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Consolidate branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ inputs.apply }}" = "true" ]; then
+            scripts/consolidate-branches.sh --apply
+          else
+            scripts/consolidate-branches.sh
+          fi
